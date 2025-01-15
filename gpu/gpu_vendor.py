@@ -15,6 +15,9 @@ class GpuVendor:
         """
         self.name, self.pci_id = self.query("name", "pci_id")
 
+    def __repr__(self):
+        return f"{self.name}: {self.pci_id}"
+
     def get_card_name(self):
         """
             Replace with vendor specific implementation
@@ -86,3 +89,5 @@ class GpuVendor:
         except:
             raise ValueError("attemted to input non integer value")
 
+class SMIException(Exception):
+    """Raise for SMI related errors"""

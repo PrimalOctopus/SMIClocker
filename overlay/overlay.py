@@ -20,7 +20,7 @@ class Window:
         label = tk.Label(self.root, text=text, fg="yellow", bg="black", font=("Arial", size))
         label.pack()
         self.root.update()
-        print(f"added text {text}")
+        #print(f"added text {text}")
         return label
 
     def change_text(self, label, text):

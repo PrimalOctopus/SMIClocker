@@ -1,8 +1,12 @@
 import subprocess
-from gpu.gpu_vendor import GpuVendor
+from gpu.gpu_vendor import GpuVendor, SMIException
 
 class GpuNvidiaSMI(GpuVendor):
     """Class for handling nvidia gpu's
+
+    Constructor
+    -----------
+    GpuNvidiaSMI(index: int = 0)
 
     Methods
     -------
@@ -20,18 +24,13 @@ class GpuNvidiaSMI(GpuVendor):
     """
 
     def __init__(self, index: int = 0):
-        """GpuNvidiaSMI constructor
+        if index >= gpu_count():
+            raise SMIException(f"Index: {index} exceeds gpu_count: {gpu_count()}")
 
-            Usage
-            -----
-            GpuNvidiaSMI(index: int = 0)
-        """
         self.index = index
-        self.vendor = "nvidia"
+        self.vendor = "NVIDIA"
 
         super().__init__()
-
-        assert index < gpu_count()
 
         self.core_clock_set, self.mem_clock_set = self.query("core.clock.limit", "mem.clock.limit")
 
@@ -39,7 +38,6 @@ class GpuNvidiaSMI(GpuVendor):
         """INTERNAL USE ONLY
 
         """
-        print(self.index)
         return runCLI(f"{command} -i {self.index}", error)
 
     def query(self, *stats: str):
