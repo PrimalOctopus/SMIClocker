@@ -1,6 +1,6 @@
-import time, os
+import time
 from gpu.gpu_nvidia_smi import GpuNvidiaSMI
-from overlay import Window
+from overlay.overlay import Window
 
 gpu = GpuNvidiaSMI(0)
 overlay = Window()
