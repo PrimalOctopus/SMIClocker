@@ -1,11 +1,14 @@
 import time
 from gpu.gpu_nvidia_smi import GpuNvidiaSMI
+from gpu.gpu_rocm_smi import GpuROCMSMI
 from overlay.overlay import Window
 from gpu.get_gpus import get_gpus
 
-get_gpus()
+#get_gpus()
 
-gpu = GpuNvidiaSMI()
+#gpu = GpuNvidiaSMI()
+
+gpu = GpuROCMSMI()
 overlay = Window()
 
 core, power, temp = gpu.query("core.clock", "power", "core.temp")

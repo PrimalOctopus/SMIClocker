@@ -1,12 +1,13 @@
-import subprocess
+import subprocess, csv
 from gpu.gpu_vendor import GpuVendor, SMIException
+from io import StringIO
 
-class GpuNvidiaSMI(GpuVendor):
-    """Class for handling nvidia gpu's
+class GpuROCMSMI(GpuVendor):
+    """Class for handling AMD gpu's with ROCM
 
     Constructor
     -----------
-    GpuNvidiaSMI(index: int = 0)
+    GpuROCMSMI(index: int = 0)
         Raises
         ------
             SMIException
@@ -31,17 +32,30 @@ class GpuNvidiaSMI(GpuVendor):
             raise SMIException(f"Index: {index} exceeds gpu_count: {gpu_count()}")
 
         self.index = index
-        self.vendor = "NVIDIA"
+        self.vendor = "AMD_ROCM"
 
         super().__init__()
 
         self.core_clock_set, self.mem_clock_set = self.query("core.clock.limit", "mem.clock.limit")
 
-    def _runCLI(self, command, error = False):
-        """INTERNAL USE ONLY
+        #NEEDED TO SET CLOCKS
+        self.core_clock_min = self.query("core.clock.min")
 
-        """
-        return runCLI(f"{command} -i {self.index}", error)
+    def _runCLI(self, command, error = False):
+        return runCLI(f"{command} -d {self.index}")
+
+    def _query_smi(self, command, *keys):
+        #print(f"{command} -d {self.index} --csv")
+
+        r = runCLI(f"{command} --csv -d {self.index}")
+
+        data = next(csv.DictReader(StringIO(r)))
+
+        data_list = []
+        for key in keys:
+            data_list.append(data[key])
+
+        return data_list if len(data_list) > 1 else data_list[0]
 
     def query(self, *stats: str):
         """Query gpu for current stats
@@ -65,17 +79,20 @@ class GpuNvidiaSMI(GpuVendor):
         """
 
         query = ""
+        results = []
         for stat in stats:
             match stat:
                 #Core
                 case "core.clock":
-                    query += "clocks.gr,"
+                    results.append(self._query_smi("-c", "sclk clock speed:")[1:-4])
                 case "core.temp":
-                    query += "temperature.gpu,"
+                    results.append(self._query_smi("-t", "Temperature (Sensor edge) (C)"))
                 case "core.temp.limit":
                     query += "temperature.gpu.tlimit,"
                 case "core.clock.limit":
-                    query += "clocks.max.gr,"
+                    results.append(self._query_smi("--showsclk", "Valid sclk range").split(" - ")[1][:-3])
+                case "core.clock.min":
+                    results.append(self._query_smi("--showsclk", "Valid sclk range").split(" - ")[0][:-3])
                 case "core.usage":
                     query += "utilization.gpu,"
 
@@ -91,7 +108,7 @@ class GpuNvidiaSMI(GpuVendor):
                 case "mem.temp":
                     query += "temperature.mem,"
                 case "mem.clock.limit":
-                    query += "clocks.max.mem,"
+                    results.append(self._query_smi("--showmclk", "Valid mclk range").split(" - ")[0][:-3])
                 case "mem.total":
                     query += "memory.total,"
                 case "mem.used":
@@ -103,7 +120,7 @@ class GpuNvidiaSMI(GpuVendor):
 
                 #Power
                 case "power":
-                    query += "power.draw,"
+                    results.append(self._query_smi("-P", "Current Socket Graphics Package Power (W)"))
                 case "power.average":
                     query += "power.draw.average,"
                 case "power.instant":
@@ -161,9 +178,9 @@ class GpuNvidiaSMI(GpuVendor):
                 case "count":
                     query += "count,"
                 case "name":
-                    query += "name,"
+                    results.append(self._query_smi("-i", "Device Name"))
                 case "pci_id":
-                    query += "pci.bus_id,"
+                    results.append(self._query_smi("--showbus", "PCI Bus"))
                 case "vbios":
                     query += "vbios_version,"
                 case "index":
@@ -218,27 +235,17 @@ class GpuNvidiaSMI(GpuVendor):
                 case "time":
                     query += "timestamp,"
 
-        #r = subprocess.run(f"nvidia-smi --query-gpu {query} --format=csv,noheader,nounits", shell = True, capture_output=True, text = True)
-        #results = r.stdout.strip().split(", ")
-
-        results = self._runCLI(f"--query-gpu {query} --format=csv,noheader,nounits").split(", ")
-
         if len(results) == 1:
             return results[0]
         else:
             return (*results,)
 
-
-    def get_card_name(self):
-        return self._runCLI("--query-gpu name --format=csv,noheader,nounits")
-
-    def get_pci_id(self):
-        return self._runCLI("--query-gpu pci.bus_id --format=csv,noheader,nounits")
-
     def set_core_clock(self, max_clock, min_clock = 0):
+        if min_clock == 0:
+            min_clock = self.core_clock_min
         self.assure_int(max_clock, min_clock)
 
-        stdout = self._runCLI(f"-lgc {min_clock},{max_clock}")
+        stdout = self._runCLI(f"-setsrange {min_clock} {max_clock} --autorespond y")
         self.core_clock_set = int(max_clock)
         return stdout
 
@@ -251,10 +258,10 @@ class GpuNvidiaSMI(GpuVendor):
         return stdout
 
     def reset_core_clock(self):
-        return self._runCLI("-rgc")
+        return self._runCLI("-r")
 
     def reset_mem_clock(self):
-        return self._runCLI("-rmc")
+        return self._runCLI("-r")
 
     def set_temp_target(self, target):
         self.assure_int(target)
@@ -268,17 +275,14 @@ class GpuNvidiaSMI(GpuVendor):
         subprocess.run(f"nvidia-smi -pm {flag}")
 
     def get_base_clock(self):
-        return self._runCLI("base-clocks").split("Graphics:")[1][:-3].lstrip()
+        return self._query_smi("--showsclk", "Valid sclk range").split(" - ")[1][:-3]
 
 def gpu_count():
-    try:
-        return int(runCLI("--query-gpu count --format=csv,noheader,nounits"))
-    except:
-        return 0
-
+    return runCLI("--showbus --csv").count("\n")
+    
 def runCLI(command, error = False):
     try:
-        r = subprocess.run(f"nvidia-smi {command} {"-eow" if error else ""}", shell = True, capture_output = True, text = True, check = True)
+        r = subprocess.run(f"rocm-smi {command}", shell = True, capture_output = True, text = True, check = True)
     except subprocess.CalledProcessError as e:
         raise SMIException(e.stdout)
     return r.stdout.strip()
