@@ -41,8 +41,8 @@ class GpuROCMSMI(GpuVendor):
         #NEEDED TO SET CLOCKS
         self.core_clock_min = self.query("core.clock.min")
 
-    def _runCLI(self, command, error = False):
-        return runCLI(f"{command} -d {self.index}")
+    def _runCLI(self, command, error = False, check = False):
+        return runCLI(f"{command} -d {self.index}", check = check)
 
     def _query_smi(self, command, *keys):
         #print(f"{command} -d {self.index} --csv")
@@ -245,7 +245,7 @@ class GpuROCMSMI(GpuVendor):
             min_clock = self.core_clock_min
         self.assure_int(max_clock, min_clock)
 
-        stdout = self._runCLI(f"-setsrange {min_clock} {max_clock} --autorespond y")
+        stdout = self._runCLI(f"--setsrange {min_clock} {max_clock} --autorespond y")
         self.core_clock_set = int(max_clock)
         return stdout
 
@@ -280,9 +280,11 @@ class GpuROCMSMI(GpuVendor):
 def gpu_count():
     return runCLI("--showbus --csv").count("\n")
     
-def runCLI(command, error = False):
+def runCLI(command, error = False, check = True):
+    #print(f"sudo /opt/rocm/bin/rocm-smi {command}")
+
     try:
-        r = subprocess.run(f"rocm-smi {command}", shell = True, capture_output = True, text = True, check = True)
+        r = subprocess.run(f"/opt/rocm/bin/rocm-smi {command}", shell = True, capture_output = True, text = True, check = check)
     except subprocess.CalledProcessError as e:
         raise SMIException(e.stdout)
     return r.stdout.strip()
