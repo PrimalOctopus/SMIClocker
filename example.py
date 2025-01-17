@@ -15,15 +15,21 @@ except Exception as e:
     except:
         sys.exit("No gpu's detected")
 
+try:
+    if sys.argv[1] == "AMD":
+        gpu = GpuROCMSMI()
+except:
+    pass
+
 overlay = Window()
 
-core, power, temp = gpu.query("core.clock", "power", "core.temp", "dog")
+core, power, temp, usage = gpu.query("core.clock", "power", "core.temp", "core.usage")
 
 default_clock = gpu.get_base_clock()
 print("Base clock: " + default_clock)
 
 model_text = overlay.add_text(gpu.name, 10)
-stats_text = overlay.add_text(f"CORE TEMP: {temp}c\nCORE CLOCK: {core}mhz\nPOWER: {power}w", 15)
+stats_text = overlay.add_text(f"CORE TEMP: {temp}c\nCORE CLOCK: {core}mhz\nPOWER: {power}w\nUSAGE: {usage}", 15)
 
 print(gpu.name)
 print(gpu.vendor)
@@ -33,8 +39,8 @@ gpu.set_core_clock(1500)
 #gpu.reset_clocks()
 
 while True:
-    temp, clock, power = gpu.query("core.temp", "core.clock", "power")
-    overlay.change_text(stats_text, f"CORE TEMP: {temp}c\nCORE CLOCK: {clock}mhz\nPOWER: {power}w")
+    temp, clock, power, usage = gpu.query("core.temp", "core.clock", "power", "core.usage")
+    overlay.change_text(stats_text, f"CORE TEMP: {temp}c\nCORE CLOCK: {clock}mhz\nPOWER: {power}w\nUSAGE: {usage}")
     if float(temp) > 58:
         print(f"Temps too high, dropping clock from! {gpu.core_clock_set}")
         gpu.set_core_clock(gpu.core_clock_set -25)

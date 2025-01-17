@@ -94,7 +94,7 @@ class GpuROCMSMI(GpuVendor):
                 case "core.clock.min":
                     results.append(self._query_smi("--showsclk", "Valid sclk range").split(" - ")[0][:-3])
                 case "core.usage":
-                    query += "utilization.gpu,"
+                    results.append(self._query_smi("-u", "GPU use (%)"))
 
                 #SM
                 case "sm.clock":
