@@ -37,7 +37,7 @@ class GpuNvidiaSMI(GpuVendor):
 
         self.core_clock_set, self.mem_clock_set = self.query("core.clock.limit", "mem.clock.limit")
 
-    def _runCLI(self, command, error = False):
+    def _runCLI(self, command, error = True):
         """INTERNAL USE ONLY
 
         """
@@ -218,10 +218,11 @@ class GpuNvidiaSMI(GpuVendor):
                 case "time":
                     query += "timestamp,"
 
-        #r = subprocess.run(f"nvidia-smi --query-gpu {query} --format=csv,noheader,nounits", shell = True, capture_output=True, text = True)
-        #results = r.stdout.strip().split(", ")
+                #Bad query
+                case _:
+                    raise SMIException(f'Bad query "{stat}"', returncode = 3)
 
-        results = self._runCLI(f"--query-gpu {query} --format=csv,noheader,nounits").split(", ")
+        results = self._runCLI(f"--query-gpu {query} --format=csv,noheader,nounits", error = False).split(", ")
 
         if len(results) == 1:
             return results[0]
@@ -238,8 +239,16 @@ class GpuNvidiaSMI(GpuVendor):
     def set_core_clock(self, max_clock, min_clock = 0):
         self.assure_int(max_clock, min_clock)
 
-        stdout = self._runCLI(f"-lgc {min_clock},{max_clock}")
+        try:
+            stdout = self._runCLI(f"-lgc {min_clock},{max_clock}", error = True)
+        except subprocess.CalledProcessError as e:
+            #Returncode 255 is returned if persistance mode is set to 0
+            if e.returncode != 255:
+                raise SMIException("Failed to set clocks", 2)
+            stdout = e.stdout
+
         self.core_clock_set = int(max_clock)
+
         return stdout
 
     def set_mem_clock(self, max_clock, min_clock = 0):
@@ -260,6 +269,10 @@ class GpuNvidiaSMI(GpuVendor):
         self.assure_int(target)
         return self._runCLI("-gtt {target}", error=True)
 
+    def set_power_limit(self, target):
+        assert int(target)
+        return self._runCLI(f"-pl {target}", error=True)
+
     def set_persistence_mode(self, flag: bool):
         try:
             assert 0 <= flag <= 1
@@ -268,17 +281,14 @@ class GpuNvidiaSMI(GpuVendor):
         subprocess.run(f"nvidia-smi -pm {flag}")
 
     def get_base_clock(self):
-        return self._runCLI("base-clocks").split("Graphics:")[1][:-3].lstrip()
+        return self._runCLI("base-clocks", error = False).split("Graphics:")[1][:-3].lstrip()
 
 def gpu_count():
     try:
-        return int(runCLI("--query-gpu count --format=csv,noheader,nounits"))
+        return int(runCLI("--query-gpu count --format=csv,noheader,nounits", error = False))
     except:
         return 0
 
-def runCLI(command, error = False):
-    try:
-        r = subprocess.run(f"nvidia-smi {command} {"-eow" if error else ""}", shell = True, capture_output = True, text = True, check = True)
-    except subprocess.CalledProcessError as e:
-        raise SMIException(e.stdout)
+def runCLI(command, error = True):
+    r = subprocess.run(f"nvidia-smi {command} {"-eow" if error else ""}", shell = True, capture_output = True, text = True, check = True)
     return r.stdout.strip()

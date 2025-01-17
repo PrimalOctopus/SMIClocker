@@ -91,3 +91,9 @@ class GpuVendor:
 
 class SMIException(Exception):
     """Raise for SMI related errors"""
+    def __init__(self, msg, returncode = 1):
+        self.msg = msg
+        self.returncode = returncode
+
+    def __repr__(self):
+        return self.msg

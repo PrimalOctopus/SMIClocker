@@ -235,6 +235,10 @@ class GpuROCMSMI(GpuVendor):
                 case "time":
                     query += "timestamp,"
 
+                #Bad query
+                case _:
+                    raise SMIException(f"Bad query ({stat})", returncode = 3)
+
         if len(results) == 1:
             return results[0]
         else:
